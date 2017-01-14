@@ -1,0 +1,27 @@
+﻿<Page
+    x:Class="ShotTracker.App.MainPage"
+    xmlns:lgv="using:LagoVista.UWP.UI.Local"
+    xmlns:vms="using:ShotTracker.App.ViewModels"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:ShotTracker.App"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    DataContext="{StaticResource MainViewModel}"
+    mc:Ignorable="d">
+    
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <CommandBar >
+            <AppBarButton Command="{Binding AddCameraCommand}" Icon="Add"  Label="Add" HorizontalAlignment="Left" />
+            <AppBarButton Command="{Binding RefreshCamerasCommand}" Icon="Refresh" Label="Refresh" />
+            <AppBarSeparator />
+            <AppBarButton Command="{Binding AddCameraCommand}" Icon="Setting"  Label="Settings"  />
+        </CommandBar>
+
+        <Button Command="{Binding RefreshTargetCommand}" Content="Refresh" Grid.Row="1" />
+    </Grid>
+</Page>

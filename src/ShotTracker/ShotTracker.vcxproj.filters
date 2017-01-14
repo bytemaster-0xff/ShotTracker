@@ -19,4 +19,8 @@
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="opencv_world320.dll" />
+    <None Include="opencv_world320d.dll" />
+  </ItemGroup>
 </Project>

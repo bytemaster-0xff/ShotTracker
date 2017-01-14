@@ -14,49 +14,45 @@ namespace ShotTracker.App.ViewModels
         public const byte STX = 0x02;
         public const byte ETX = 0x03;
         public const byte EOT = 0x03;
-        
-
-        Services.ImagingServicesClient _client;
 
         public MainViewModel()
         {
             RefreshTargetCommand = new RelayCommand(RefreshTarget);
 
-            _client = new Services.ImagingServicesClient();
         }
 
         public async override Task InitAsync()
         {
             await base.InitAsync();
 
-            await _client.ConnectAsync("127.0.0.1", 27015);
-        }
+         }
 
         void RefreshTarget()
         {
-            Task.Run(() =>
+            Task.Run(async () =>
             {
                 short checkSum = 0;
 
                 var buffer = System.IO.File.ReadAllBytes("Content/UWPTarget01.jpg");
                 var sizeBuffer = BitConverter.GetBytes(Convert.ToInt32(buffer.Length));
-
-                _client.SendAsync(SOH);
+                var _client = new Services.ImagingServicesClient();
+                await _client.ConnectAsync("127.0.0.1", 27015);
+                await _client.SendAsync(SOH);
 
                 //4 Bytes
-                _client.SendAsync(sizeBuffer);
-                _client.SendAsync(STX);
+              /*  await _client.SendAsync(sizeBuffer);
+                await _client.SendAsync(STX);
 
-                _client.SendAsync(buffer);
+                await _client.SendAsync(buffer);
 
                 for(var idx = 0; idx < buffer.Length; ++idx)
                 {
                     checkSum += buffer[idx];
                 }
 
-                _client.SendAsync(ETX);
-                _client.SendAsync(BitConverter.GetBytes(checkSum));
-                _client.SendAsync(EOT);
+                await _client.SendAsync(ETX);
+                await _client.SendAsync(BitConverter.GetBytes(checkSum));
+                await _client.SendAsync(EOT);*/
 
 
                 var result = _client.Receive();

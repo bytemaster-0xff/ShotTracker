@@ -87,7 +87,7 @@ void ProcessSocket(void *param)
 	printf("Accepted Connection\n");
 	int result;
 	int sendResult;
-	
+
 	int recvbuflen = RECV_BUFFER_SIZE;
 
 	char recvbuf[RECV_BUFFER_SIZE];
@@ -97,6 +97,7 @@ void ProcessSocket(void *param)
 
 	int incomingImageSize;
 	int currentImageOffsetIndex;
+	short checkSum;
 
 	ParserStates parserState = ParserStates_Idle;
 
@@ -123,24 +124,24 @@ void ProcessSocket(void *param)
 				case ParserStates_Idle:
 					if (recvbuf[idx] == SOH)
 						readIndex = 0;
-						parserState = ParserStates_SohRead; 
+					parserState = ParserStates_SohRead;
 					break;
 				case ParserStates_SohRead:
 					switch (readIndex++)
 					{
-						case 0: incomingImageSize = recvbuf[idx]; break;
-						case 1: incomingImageSize = (recvbuf[idx] << 8) | incomingImageSize; break;
-						case 2: incomingImageSize = (recvbuf[idx] << 16) | incomingImageSize; break;
-						case 3: 
-							incomingImageSize = (recvbuf[idx] << 24) | incomingImageSize; 
-							break;
-						case 4:
-							if (recvbuf[idx] == STX)
-							{
-								parserState = ParserStates_StxRead;
-								currentImageOffsetIndex = 0;
-							}
-							break;
+					case 0: incomingImageSize = recvbuf[idx]; break;
+					case 1: incomingImageSize = (recvbuf[idx] << 8) | incomingImageSize; break;
+					case 2: incomingImageSize = (recvbuf[idx] << 16) | incomingImageSize; break;
+					case 3:
+						incomingImageSize = (recvbuf[idx] << 24) | incomingImageSize;
+						break;
+					case 4:
+						if (recvbuf[idx] == STX)
+						{
+							parserState = ParserStates_StxRead;
+							currentImageOffsetIndex = 0;
+						}
+						break;
 					}
 					break;
 				case ParserStates_StxRead:
@@ -154,17 +155,19 @@ void ProcessSocket(void *param)
 					if (recvbuf[idx] == ETX)
 					{
 						parserState = ParserStates_WaitingForEot;
+						readIndex = 0;
 					}
 				case ParserStates_WaitingForEot:
-					if (recvbuf[idx] == EOT)
-					{
-						/* Read two bytes for the check sum */
-
+					switch (readIndex) {
+					case 0: checkSum = recvbuf[idx];  break;
+					case 1: checkSum = (recvbuf[idx] << 8) | checkSum;  break;
+					case 2:if (recvbuf[idx] == EOT)
+						send(ClientSocket, "OK", 2, 0);
+						break;
 					}
 					break;
 				}
 			}
-
 		}
 		else if (result == 0)
 			printf("Connection closing...\n");

@@ -61,8 +61,9 @@ namespace ShotTracker.App.Services
                     {
                         if (_sendTCS != null)
                         {
-                            _sendTCS.SetResult(0);
+                            var tcs = _sendTCS;
                             _sendTCS = null;
+                            tcs.SetResult(0);
                         }
                     }
                 });
@@ -90,8 +91,9 @@ namespace ShotTracker.App.Services
                     {
                         if (_sendTCS != null)
                         {
-                            _sendTCS.SetResult(0);
+                            var tcs = _sendTCS;
                             _sendTCS = null;
+                            tcs.SetResult(0);
                         }
                     }
                 });

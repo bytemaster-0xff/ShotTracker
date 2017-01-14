@@ -36,7 +36,7 @@ const char* window_name = "Edge Map";
 #define SOH  0x01
 #define STX  0x02
 #define ETX  0x03
-#define EOT  0x03
+#define EOT  0x04
 
 
 
@@ -79,6 +79,54 @@ enum ParserStates
 	ParserStates_EotRead
 };
 
+void ProcessImage(byte* buffer, unsigned int size)
+{
+	Mat src, src_gray;
+	Mat dst, detected_edges;
+
+	src = Mat(size, 1, CV_8U, buffer).clone();
+	//![create_mat]
+	/// Create a matrix of the same type and size as src (for dst)
+	dst.create(src.size(), src.type());
+	//![create_mat]
+
+	//![convert_to_gray]
+	cvtColor(src, src_gray, COLOR_BGR2GRAY);
+	//![convert_to_gray]
+
+	//![create_window]
+	namedWindow(window_name, WINDOW_AUTOSIZE);
+	//![create_window]
+
+	//![create_trackbar]
+	/// Create a Trackbar for user to enter threshold
+	createTrackbar("Min Threshold:", window_name, &lowThreshold, max_lowThreshold, CannyThreshold);
+	//![create_trackbar]
+
+	/// Show the image
+	//![reduce_noise]
+	/// Reduce noise with a kernel 3x3
+	blur(src_gray, detected_edges, Size(3, 3));
+	//![reduce_noise]
+
+	//![canny]
+	/// Canny detector
+	Canny(detected_edges, detected_edges, lowThreshold, lowThreshold*ratio, kernel_size);
+	//![canny]
+
+	/// Using Canny's output as a mask, we display our result
+	//![fill]
+	dst = Scalar::all(0);
+	//![fill]
+
+	//![copyto]
+	src.copyTo(dst, detected_edges);
+	//![copyto]
+
+	//![display]
+	imshow(window_name, dst);
+
+}
 
 void ProcessSocket(void *param)
 {
@@ -92,78 +140,92 @@ void ProcessSocket(void *param)
 
 	char recvbuf[RECV_BUFFER_SIZE];
 	char tmpBuffer[HOLDING_BUFFER_SIZE];
-	char *imgBuffer = new char[IMAGE_BUFFER_SIZE];
+	byte *imgBuffer = new byte[IMAGE_BUFFER_SIZE];
 	int readIndex = 0;
 
-	int incomingImageSize;
-	int currentImageOffsetIndex;
-	short checkSum;
+	unsigned int incomingImageSize = 0;
+	int currentImageOffsetIndex = 0;
+	unsigned short checksum = 0;
+	unsigned short calcChecksum = 0;
 
 	ParserStates parserState = ParserStates_Idle;
-
-
-	// Receive until the peer shuts down the connection
 	do {
-
+		printf("Starting to listen\n");
 		result = recv(ClientSocket, recvbuf, recvbuflen, 0);
 		if (result > 0) {
 			printf("Bytes received: %d\n", result);
 
 			for (int idx = 0; idx < result; ++idx)
 			{
+				unsigned char ch = (unsigned char)recvbuf[idx];
 				switch (parserState)
 				{
 				case ParserStates_Idle:
 					if (recvbuf[idx] == SOH)
+					{
 						readIndex = 0;
-					parserState = ParserStates_SohRead;
+						parserState = ParserStates_SohRead;
+						printf("Found SOH, started parsing \n");
+					}
 					break;
 				case ParserStates_SohRead:
+
+					
 					switch (readIndex++)
 					{
-					case 0: incomingImageSize = recvbuf[idx]; break;
-					case 1: incomingImageSize = (recvbuf[idx] << 8) | incomingImageSize; break;
-					case 2: incomingImageSize = (recvbuf[idx] << 16) | incomingImageSize; break;
+					case 0: incomingImageSize = ch | incomingImageSize; break;
+					case 1: incomingImageSize = (ch << 8) | incomingImageSize; break;
+					case 2: incomingImageSize = (ch << 16) | incomingImageSize; break;
 					case 3:
-						incomingImageSize = (recvbuf[idx] << 24) | incomingImageSize;
+						incomingImageSize = (ch << 24) | incomingImageSize;
 						break;
 					case 4:
 						if (recvbuf[idx] == STX)
 						{
 							parserState = ParserStates_StxRead;
 							currentImageOffsetIndex = 0;
+							printf("Found STX, Image Size %d\n", incomingImageSize);
 						}
 						break;
 					}
+
+					printf("Image Size %d\n", incomingImageSize);
+
 					break;
 				case ParserStates_StxRead:
-					imgBuffer[currentImageOffsetIndex++] = recvbuf[idx];
+					imgBuffer[currentImageOffsetIndex++] = ch;
+					calcChecksum += ch;
 					if (currentImageOffsetIndex == incomingImageSize)
 					{
 						parserState = ParserStates_WaitingForEtx;
+						printf("Image Read Completed\n");
 					}
 					break;
 				case ParserStates_WaitingForEtx:
-					if (recvbuf[idx] == ETX)
+					if (ch == ETX)
 					{
 						parserState = ParserStates_WaitingForEot;
 						readIndex = 0;
+						printf("Read ETX, waiting for check sum\n");
 					}
+					break;
 				case ParserStates_WaitingForEot:
-					switch (readIndex) {
-					case 0: checkSum = recvbuf[idx];  break;
-					case 1: checkSum = (recvbuf[idx] << 8) | checkSum;  break;
+					printf("READING BYTE %d %d\n", readIndex, ch);
+					switch (readIndex++) {
+					case 0: checksum = ch;  break;
+					case 1: checksum = (ch << 8) | checksum;  break;
 					case 2:if (recvbuf[idx] == EOT)
+						printf("Read Check sum %d - %d and EOT - All Done\n", checksum, calcChecksum);
 						send(ClientSocket, "OK", 2, 0);
-						delete(imgBuffer);
 						break;
 					}
 					break;
 				}
 			}
 		}
-		else if (result == 0)
+		else if (result == 0) {
 			printf("Connection closing...\n");
+		}
 		else {
 			printf("recv failed with error: %d\n", WSAGetLastError());
 			closesocket(ClientSocket);
@@ -183,6 +245,10 @@ void ProcessSocket(void *param)
 		WSACleanup();
 		return;
 	}
+
+	ProcessImage(imgBuffer, incomingImageSize);
+	delete(imgBuffer);
+
 
 	// cleanup
 	closesocket(ClientSocket);
@@ -283,53 +349,9 @@ void StartListening(void *)
 */
 int main(int, char** argv)
 {
-	std::streampos fileSize;
+	//_beginthread(StartListening, 1024, NULL);
 
-	//![load]
-	src = imread(argv[1], IMREAD_COLOR); // Load an image
-
-	std::ifstream file(argv[1], std::ios::binary);
-	fileSize = file.tellg();
-	file.seekg(0, std::ios::end);
-	fileSize = file.tellg();
-	file.seekg(0, std::ios::beg);
-
-	std::vector<BYTE> fileData(fileSize);
-	file.read((char*)&fileData[0], fileSize);
-
-	// read the data:
-	//src = Mat(fileSize, 1, CV_8U, fileData.data).clone();
-
-
-	if (src.empty())
-	{
-		return -1;
-	}
-	//![load]
-
-	//![create_mat]
-	/// Create a matrix of the same type and size as src (for dst)
-	dst.create(src.size(), src.type());
-	//![create_mat]
-
-	//![convert_to_gray]
-	cvtColor(src, src_gray, COLOR_BGR2GRAY);
-	//![convert_to_gray]
-
-	//![create_window]
-	namedWindow(window_name, WINDOW_AUTOSIZE);
-	//![create_window]
-
-	//![create_trackbar]
-	/// Create a Trackbar for user to enter threshold
-	createTrackbar("Min Threshold:", window_name, &lowThreshold, max_lowThreshold, CannyThreshold);
-	//![create_trackbar]
-
-	/// Show the image
-	CannyThreshold(0, 0);
-
-	_beginthread(StartListening, 1024, NULL);
-
+	StartListening(NULL);
 	/// Wait until user exit program by pressing a key
 	waitKey(0);
 

@@ -92,7 +92,7 @@ void ProcessSocket(void *param)
 
 	char recvbuf[RECV_BUFFER_SIZE];
 	char tmpBuffer[HOLDING_BUFFER_SIZE];
-	char imgBuffer[IMAGE_BUFFER_SIZE];
+	char *imgBuffer = new char[IMAGE_BUFFER_SIZE];
 	int readIndex = 0;
 
 	int incomingImageSize;
@@ -108,14 +108,6 @@ void ProcessSocket(void *param)
 		result = recv(ClientSocket, recvbuf, recvbuflen, 0);
 		if (result > 0) {
 			printf("Bytes received: %d\n", result);
-
-			// Echo the buffer back to the sender
-			if (sendResult == SOCKET_ERROR) {
-				printf("send failed with error: %d\n", WSAGetLastError());
-				closesocket(ClientSocket);
-				WSACleanup();
-				return;
-			}
 
 			for (int idx = 0; idx < result; ++idx)
 			{
@@ -163,6 +155,7 @@ void ProcessSocket(void *param)
 					case 1: checkSum = (recvbuf[idx] << 8) | checkSum;  break;
 					case 2:if (recvbuf[idx] == EOT)
 						send(ClientSocket, "OK", 2, 0);
+						delete(imgBuffer);
 						break;
 					}
 					break;

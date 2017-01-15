@@ -81,10 +81,12 @@ enum ParserStates
 
 void ProcessImage(byte* buffer, unsigned int size)
 {
-	Mat src, src_gray;
-	Mat dst, detected_edges;
 
-	src = Mat(size, 1, CV_8U, buffer).clone();
+	std::vector<char> data(buffer, buffer + size);
+
+	Mat input = Mat(data);
+
+	src = imdecode(input, IMREAD_COLOR);
 	//![create_mat]
 	/// Create a matrix of the same type and size as src (for dst)
 	dst.create(src.size(), src.type());
@@ -125,6 +127,9 @@ void ProcessImage(byte* buffer, unsigned int size)
 
 	//![display]
 	imshow(window_name, dst);
+
+	waitKey(0);
+
 
 }
 
@@ -247,9 +252,6 @@ void ProcessSocket(void *param)
 	}
 
 	ProcessImage(imgBuffer, incomingImageSize);
-	delete(imgBuffer);
-
-
 	// cleanup
 	closesocket(ClientSocket);
 

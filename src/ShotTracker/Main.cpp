@@ -27,7 +27,7 @@ Mat src, src_gray;
 Mat dst, detected_edges;
 
 int edgeThresh = 1;
-int lowThreshold;
+int lowThreshold = 24;
 int const max_lowThreshold = 100;
 int ratio = 3;
 int kernel_size = 3;
@@ -37,8 +37,6 @@ const char* window_name = "Edge Map";
 #define STX  0x02
 #define ETX  0x03
 #define EOT  0x04
-
-
 
 static void CannyThreshold(int, void*)
 {
@@ -66,8 +64,6 @@ static void CannyThreshold(int, void*)
 	//![display]
 }
 
-
-
 enum ParserStates
 {
 	ParserStates_Idle,
@@ -79,58 +75,58 @@ enum ParserStates
 	ParserStates_EotRead
 };
 
-void ProcessImage(byte* buffer, unsigned int size)
+std::vector<Vec4i> GetLines(byte* buffer, unsigned int size)
 {
-
 	std::vector<char> data(buffer, buffer + size);
+
+	Mat src, gray, detectedEdges;
 
 	Mat input = Mat(data);
 
 	src = imdecode(input, IMREAD_COLOR);
-	//![create_mat]
-	/// Create a matrix of the same type and size as src (for dst)
+
+	cvtColor(src, gray, CV_BGR2GRAY);
+
 	dst.create(src.size(), src.type());
-	//![create_mat]
 
-	//![convert_to_gray]
-	cvtColor(src, src_gray, COLOR_BGR2GRAY);
-	//![convert_to_gray]
+	blur(gray, detectedEdges, Size(3, 3));
 
-	//![create_window]
-	namedWindow(window_name, WINDOW_AUTOSIZE);
-	//![create_window]
+	GaussianBlur(detectedEdges, detectedEdges, Size(3, 3), 2, 2);
 
-	//![create_trackbar]
-	/// Create a Trackbar for user to enter threshold
-	createTrackbar("Min Threshold:", window_name, &lowThreshold, max_lowThreshold, CannyThreshold);
-	//![create_trackbar]
+	lowThreshold = 50;
 
-	/// Show the image
-	//![reduce_noise]
-	/// Reduce noise with a kernel 3x3
-	blur(src_gray, detected_edges, Size(3, 3));
-	//![reduce_noise]
+	Canny(detectedEdges, detectedEdges, lowThreshold, lowThreshold*ratio, kernel_size);
 
-	//![canny]
-	/// Canny detector
-	Canny(detected_edges, detected_edges, lowThreshold, lowThreshold*ratio, kernel_size);
-	//![canny]
+	GaussianBlur(detectedEdges, detectedEdges, Size(3, 3), 2, 2);
 
-	/// Using Canny's output as a mask, we display our result
-	//![fill]
-	dst = Scalar::all(0);
-	//![fill]
+	std::vector<Vec4i> lines;
+	HoughLinesP(detectedEdges, lines, 1, CV_PI / 180, 50, 5, 5);
 
-	//![copyto]
-	src.copyTo(dst, detected_edges);
-	//![copyto]
+	return lines;
 
-	//![display]
-	imshow(window_name, dst);
+}
 
-	waitKey(0);
+int totalBytesSent = 0;
 
+void SendInt(SOCKET socket, int value)
+{
+	char buffer[4];
+	buffer[0] = value & 0xFF;
+	buffer[1] = (value >> 8) & 0xFF;
+	buffer[2] = (value >> 16) & 0xFF;
+	buffer[3] = (value >> 24) & 0xFF;
 
+	int bytesSent = send(socket, buffer, 4, 0);
+
+	totalBytesSent += bytesSent;
+}
+
+void SendVector(SOCKET socket, Vec4i vector)
+{
+	SendInt(socket, vector[0]);
+	SendInt(socket, vector[1]);
+	SendInt(socket, vector[2]);
+	SendInt(socket, vector[3]);
 }
 
 void ProcessSocket(void *param)
@@ -139,12 +135,10 @@ void ProcessSocket(void *param)
 
 	printf("Accepted Connection\n");
 	int result;
-	int sendResult;
 
 	int recvbuflen = RECV_BUFFER_SIZE;
 
 	char recvbuf[RECV_BUFFER_SIZE];
-	char tmpBuffer[HOLDING_BUFFER_SIZE];
 	byte *imgBuffer = new byte[IMAGE_BUFFER_SIZE];
 	int readIndex = 0;
 
@@ -221,7 +215,20 @@ void ProcessSocket(void *param)
 					case 1: checksum = (ch << 8) | checksum;  break;
 					case 2:if (recvbuf[idx] == EOT)
 						printf("Read Check sum %d - %d and EOT - All Done\n", checksum, calcChecksum);
-						send(ClientSocket, "OK", 2, 0);
+						std::vector<Vec4i> lines = GetLines(imgBuffer, incomingImageSize);
+						SendInt(ClientSocket, lines.size());
+						for (size_t i = 0; i < lines.size(); i++)
+						{
+							Vec4i line = lines[i];
+							SendVector(ClientSocket, line);
+							if (i % 100 == 0)
+							{
+								printf("Sent %d lines\n", i);
+							}
+						}
+
+						printf("Sent %d total lines and %d bytes\n", lines.size(), totalBytesSent);
+
 						break;
 					}
 					break;
@@ -251,7 +258,6 @@ void ProcessSocket(void *param)
 		return;
 	}
 
-	ProcessImage(imgBuffer, incomingImageSize);
 	// cleanup
 	closesocket(ClientSocket);
 
@@ -348,6 +354,7 @@ void StartListening(void *)
 
 /**
 * @function main
+http://www.bandgap.cs.rice.edu/classes/comp410/resources/Using%20Azure/WAPTK/Labs/WindowsAzureNativeVS2010/Lab.html/html/docSet_597aed2d-2ad5-4da2-8ecc-f0c7ba5e1eb1.html
 */
 int main(int, char** argv)
 {
@@ -357,5 +364,48 @@ int main(int, char** argv)
 	/// Wait until user exit program by pressing a key
 	waitKey(0);
 
+	return 0;
+}
+
+int main1(int argc, char** argv)
+{
+	Mat src, gray;
+	if (argc != 2)
+		return -1;
+
+	src = imread(argv[1], IMREAD_COLOR); // Load an image
+
+	cvtColor(src, gray, CV_BGR2GRAY);
+
+	dst.create(src.size(), src.type());
+
+	blur(gray, detected_edges, Size(3, 3));
+
+	GaussianBlur(detected_edges, detected_edges, Size(3, 3), 2, 2);
+
+	lowThreshold = 50;
+
+	Canny(detected_edges, detected_edges, lowThreshold, lowThreshold*ratio, kernel_size);
+
+	GaussianBlur(detected_edges, detected_edges, Size(3, 3), 2, 2);
+
+	std::vector<Vec4i> lines;
+	HoughLinesP(detected_edges, lines, 1, CV_PI / 180, 50, 5, 5);
+	for (size_t i = 0; i < lines.size(); i++)
+	{
+		Vec4i l = lines[i];
+		line(dst, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(0, 0, 255), 3, CV_AA);
+		line(src, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(0, 255, 0), 3, CV_AA);
+	}
+
+	namedWindow("original", 1);
+	imshow("original", src);
+
+	namedWindow("edge", 1);
+	imshow("edge", detected_edges);
+
+	namedWindow("output", 1);
+	imshow("output", dst);
+	waitKey(0);
 	return 0;
 }

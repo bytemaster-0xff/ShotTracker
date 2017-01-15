@@ -9,7 +9,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     DataContext="{StaticResource MainViewModel}"
     mc:Ignorable="d">
-    
+
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="auto" />
@@ -17,11 +17,19 @@
         </Grid.RowDefinitions>
         <CommandBar >
             <AppBarButton Command="{Binding AddCameraCommand}" Icon="Add"  Label="Add" HorizontalAlignment="Left" />
-            <AppBarButton Command="{Binding RefreshCamerasCommand}" Icon="Refresh" Label="Refresh" />
+            <AppBarButton Command="{Binding RefreshTargetCommand}" Icon="Refresh" Label="Refresh" />
             <AppBarSeparator />
-            <AppBarButton Command="{Binding AddCameraCommand}" Icon="Setting"  Label="Settings"  />
+            <AppBarButton Click="AppBarButton_Click"  Icon="Setting"  Label="Settings"  />
         </CommandBar>
+        <Grid Grid.Row="1" x:Name="OriginalImageContents" Tapped="OriginalImageContents_Tapped">
+            <Image Source="/Content/UWPTarget01.jpg"  Stretch="None" HorizontalAlignment="Left" VerticalAlignment="Top" />
+            <Ellipse Margin="30,30, 0, 0" Fill="Black" Height="10" Width="10" HorizontalAlignment="Left" VerticalAlignment="Top" />
+        </Grid>
+        <Grid x:Name="ShotImage" Grid.Row="1" HorizontalAlignment="Left" VerticalAlignment="Top">
 
-        <Button Command="{Binding RefreshTargetCommand}" Content="Refresh" Grid.Row="1" />
+        </Grid>
+        <StackPanel Grid.Row="1">
+            <TextBlock x:Name="RenderTime" Text="-" />
+        </StackPanel>
     </Grid>
 </Page>

@@ -1,4 +1,5 @@
 ﻿using LagoVista.Core.Commanding;
+using ShotTracker.App.Models;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -10,6 +11,8 @@ namespace ShotTracker.App.ViewModels
 {
     public class MainViewModel : LagoVista.Core.ViewModels.ViewModelBase
     {
+
+        public event EventHandler<Response> ResponseAvailable;
 
         public const byte SOH = 0x01;
         public const byte STX = 0x02;
@@ -30,17 +33,23 @@ namespace ShotTracker.App.ViewModels
 
         void RefreshTarget()
         {
+            var buffer = System.IO.File.ReadAllBytes("Content/UWPTarget01.jpg");
+            RefreshTarget(buffer);            
+        }
+
+        public void RefreshTarget(byte[] buffer)
+        {
             Task.Run(async () =>
             {
+                var response = new Models.Response();
+
                 short checkSum = 0;
 
-
-
-                var buffer = System.IO.File.ReadAllBytes("Content/UWPTarget01.jpg");
-                var sizeBuffer = BitConverter.GetBytes(Convert.ToInt32(buffer.Length));
                 var client = new Services.ImagingServicesClient();
                 await client.ConnectAsync("127.0.0.1", 27015);
                 await client.SendAsync(SOH);
+
+                var sizeBuffer = BitConverter.GetBytes(Convert.ToInt32(buffer.Length));
 
                 //4 Bytes
                 await client.SendAsync(sizeBuffer);
@@ -57,12 +66,18 @@ namespace ShotTracker.App.ViewModels
                 await client.SendAsync(BitConverter.GetBytes(checkSum));
                 await client.SendAsync(EOT);
 
-                var result = await client.Receive();
-                var contents = System.Text.ASCIIEncoding.ASCII.GetString(result);
+                var done = false;
+                while(!done)
+                {
+                    var result = await client.Receive();
+                    done = response.Parse(result);
+                }
+
+                ResponseAvailable(this, response);
+               
                 client.Close();
-                Debug.WriteLine(contents);
             });
-        }
+        }       
 
         public RelayCommand RefreshTargetCommand { get; private set; }
     }

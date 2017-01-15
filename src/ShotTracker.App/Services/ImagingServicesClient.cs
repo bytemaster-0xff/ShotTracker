@@ -124,8 +124,13 @@ namespace ShotTracker.App.Services
                         {
                             if (e.SocketError == SocketError.Success)
                             {
-                                _recvTCS.SetResult(e.Buffer);
+                                var outputBuffer = new byte[e.BytesTransferred];
+                                for (var idx = 0; idx < e.BytesTransferred; ++idx)
+                                    outputBuffer[idx] = e.Buffer[idx];
+
+                                var tcs = _recvTCS;
                                 _recvTCS = null;
+                                tcs.SetResult(outputBuffer);
                             }
                             else
                             {
